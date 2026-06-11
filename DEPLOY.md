@@ -20,10 +20,13 @@ cd /opt/gh2lark
 # 创建 .env 文件
 cat > .env << 'EOF'
 LARK_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/YOUR-HOOK-ID
+LARK_SIGNING_SECRET=your-bot-signing-secret
 GITHUB_WEBHOOK_SECRET=your-webhook-secret
 EOF
 
-# ⚠️ 把 YOUR-HOOK-ID 和 your-webhook-secret 换成真实值
+# ⚠️ 把 YOUR-HOOK-ID 和 secret 换成真实值
+# LARK_SIGNING_SECRET 来自飞书机器人安全设置页面的「签名校验」密钥
+# 如果机器人未开启签名校验，可留空或删除这一行
 
 ## 3️⃣ 构建并启动
 
