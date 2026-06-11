@@ -29,7 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := lark.NewClient(cfg.LarkWebhookURL)
+	client := lark.NewClient(cfg.LarkWebhookURL, cfg.LarkSigningSecret)
 	h := &handler{cfg: cfg, client: client}
 
 	mux := http.NewServeMux()

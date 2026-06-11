@@ -2,10 +2,14 @@ package lark
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -14,8 +18,9 @@ const MaxMessageSize = 20 * 1024
 
 // Client sends messages to a Lark custom bot webhook.
 type Client struct {
-	webhookURL string
-	httpClient *http.Client
+	webhookURL    string
+	signingSecret string
+	httpClient    *http.Client
 }
 
 // TextMessage is a Lark text message payload (msg_type: text).
@@ -82,10 +87,12 @@ type Response struct {
 	Msg        string `json:"msg"`
 }
 
-// NewClient creates a Lark webhook client with a 30-second HTTP timeout.
-func NewClient(webhookURL string) *Client {
+// NewClient creates a Lark webhook client.
+// signingSecret is optional — pass "" to skip signing.
+func NewClient(webhookURL, signingSecret string) *Client {
 	return &Client{
-		webhookURL: webhookURL,
+		webhookURL:    webhookURL,
+		signingSecret: signingSecret,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -118,7 +125,50 @@ func (c *Client) SendCard(card *InteractiveMessage) error {
 	return c.post(body)
 }
 
+// signedMessage adds timestamp+sign fields to a Lark message body using the
+// signing secret from bot security settings.
+func (c *Client) signedMessage(original []byte) ([]byte, error) {
+	if c.signingSecret == "" {
+		return original, nil
+	}
+
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	sign := genSign(c.signingSecret, ts)
+
+	// Inject timestamp + sign as top-level JSON keys
+	var payload map[string]any
+	if err := json.Unmarshal(original, &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal for signing: %w", err)
+	}
+	payload["timestamp"] = ts
+	payload["sign"] = sign
+
+	signed, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal signed message: %w", err)
+	}
+	return signed, nil
+}
+
+// genSign computes the Lark bot webhook signature:
+//
+//	stringToSign = timestamp + "\n" + secret
+//	sign          = base64(HmacSHA256(key=stringToSign, data=""|nil))
+//
+// Ref: https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot#7b1c3180
+func genSign(secret, timestamp string) string {
+	stringToSign := timestamp + "\n" + secret
+	h := hmac.New(sha256.New, []byte(stringToSign))
+	h.Write(nil) // empty data — hash of zero bytes with the keyed HMAC
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+}
+
 func (c *Client) post(body []byte) error {
+	body, err := c.signedMessage(body)
+	if err != nil {
+		return fmt.Errorf("sign message: %w", err)
+	}
+
 	if len(body) > MaxMessageSize {
 		return fmt.Errorf("message body size %d exceeds Lark limit of %d bytes", len(body), MaxMessageSize)
 	}

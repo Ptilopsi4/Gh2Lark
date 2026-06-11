@@ -12,6 +12,12 @@ type Config struct {
 	// Must start with https://open.feishu.cn/open-apis/bot/v2/hook/
 	LarkWebhookURL string
 
+	// LarkSigningSecret is the optional signing secret configured on the Lark
+	// bot security settings page (different from the webhook URL token).
+	// When set, every request includes a timestamp+sign for verification.
+	// When empty, signing is skipped.
+	LarkSigningSecret string
+
 	// GitHubWebhookSecret is the optional secret token configured on the GitHub
 	// webhook for HMAC-SHA256 payload signature validation.
 	// When empty, signature validation is skipped.
@@ -30,6 +36,7 @@ type Config struct {
 func Load() (*Config, error) {
 	cfg := &Config{
 		LarkWebhookURL:       os.Getenv("LARK_WEBHOOK_URL"),
+		LarkSigningSecret:    os.Getenv("LARK_SIGNING_SECRET"),
 		GitHubWebhookSecret:  os.Getenv("GITHUB_WEBHOOK_SECRET"),
 		Port:                 envOrDefault("PORT", "8080"),
 		MaxPayloadSize:       envOrDefaultInt64("MAX_PAYLOAD_SIZE", 25*1024*1024),
