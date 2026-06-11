@@ -148,6 +148,106 @@ func TestTransformIssuesClosed(t *testing.T) {
 	}
 }
 
+func TestTransformReview(t *testing.T) {
+	body := reviewJSON(t, "submitted", "approved", "LGTM!")
+
+	card, err := Transform("pull_request_review", body)
+	if err != nil {
+		t.Fatalf("Transform review failed: %v", err)
+	}
+	if card.Card.Header.Template != "green" {
+		t.Errorf("submitted review color = %s, want green", card.Card.Header.Template)
+	}
+	if !contains(t, card, "LGTM!") {
+		t.Error("card should contain review comment")
+	}
+	if !contains(t, card, "Approved") {
+		t.Error("card should show approved verdict")
+	}
+	if !contains(t, card, "View Review") {
+		t.Error("card should have view button")
+	}
+}
+
+func TestTransformReviewDismissed(t *testing.T) {
+	body := reviewJSON(t, "dismissed", "dismissed", "Stale review")
+
+	card, err := Transform("pull_request_review", body)
+	if err != nil {
+		t.Fatalf("Transform dismissed review failed: %v", err)
+	}
+	if card.Card.Header.Template != "orange" {
+		t.Errorf("dismissed review color = %s, want orange", card.Card.Header.Template)
+	}
+	if !contains(t, card, "Dismissed") {
+		t.Error("card should show dismissed verdict")
+	}
+}
+
+func TestTransformReviewEdited(t *testing.T) {
+	body := reviewJSON(t, "edited", "commented", "Updated review body")
+
+	card, err := Transform("pull_request_review", body)
+	if err != nil {
+		t.Fatalf("Transform edited review failed: %v", err)
+	}
+	if card.Card.Header.Template != "blue" {
+		t.Errorf("edited review color = %s, want blue", card.Card.Header.Template)
+	}
+}
+
+func TestTransformReviewThreadResolved(t *testing.T) {
+	body := reviewThreadJSON(t, "resolved", true)
+
+	card, err := Transform("pull_request_review_thread", body)
+	if err != nil {
+		t.Fatalf("Transform review thread resolved failed: %v", err)
+	}
+	if card.Card.Header.Template != "green" {
+		t.Errorf("resolved thread color = %s, want green", card.Card.Header.Template)
+	}
+	if !contains(t, card, "resolved") {
+		t.Error("card should show resolved action")
+	}
+	if !contains(t, card, "View Pull Request") {
+		t.Error("card should have view PR button")
+	}
+}
+
+func TestTransformReviewThreadUnresolved(t *testing.T) {
+	body := reviewThreadJSON(t, "unresolved", false)
+
+	card, err := Transform("pull_request_review_thread", body)
+	if err != nil {
+		t.Fatalf("Transform review thread unresolved failed: %v", err)
+	}
+	if card.Card.Header.Template != "orange" {
+		t.Errorf("unresolved thread color = %s, want orange", card.Card.Header.Template)
+	}
+	if !contains(t, card, "unresolved") {
+		t.Error("card should show unresolved action")
+	}
+	if !contains(t, card, "this needs more thought") {
+		t.Error("card should contain last comment text")
+	}
+	if !contains(t, card, "author") {
+		t.Error("card should contain comment author")
+	}
+}
+
+func TestTransformReviewThreadNoComments(t *testing.T) {
+	body := reviewThreadJSON(t, "resolved", true)
+	// remove comments
+	body = []byte(`{"action":"resolved","thread":{"id":1,"node_id":"X","is_resolved":true,"comments":[]},"pull_request":{"number":42,"title":"T","state":"open","html_url":"https://github.com/x/p/42","user":{},"head":{"ref":"a","sha":"x"},"base":{"ref":"b","sha":"y"}},"repository":{"full_name":"x/y","html_url":"https://github.com/x/y","private":false},"sender":{}}`)
+
+	card, err := Transform("pull_request_review_thread", body)
+	if err != nil {
+		t.Fatalf("Transform review thread no-comments failed: %v", err)
+	}
+	// Should not crash on empty comments slice
+	_ = card
+}
+
 func TestTransformFallback(t *testing.T) {
 	body := []byte(`{"random": "event", "data": 42}`)
 
@@ -337,6 +437,92 @@ func githubIssueJSON(t *testing.T, action, state string) []byte {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal issue payload: %v", err)
+	}
+	return b
+}
+
+func reviewJSON(t *testing.T, action, state, body string) []byte {
+	t.Helper()
+	payload := map[string]any{
+		"action": action,
+		"review": map[string]any{
+			"id":           456,
+			"body":         body,
+			"state":        state,
+			"html_url":     "https://github.com/octocat/Hello-World/pull/42#pullrequestreview-456",
+			"user":         map[string]any{"login": "reviewer1", "name": "Reviewer One"},
+			"submitted_at": "2026-06-11T14:00:00Z",
+			"commit_id":    "abc1234567890123456789012345678901234567",
+		},
+		"pull_request": map[string]any{
+			"number":    42,
+			"title":     "Add OAuth2 login support",
+			"state":     "open",
+			"html_url":  "https://github.com/octocat/Hello-World/pull/42",
+			"user":      map[string]any{"login": "author"},
+			"head":      map[string]any{"ref": "feat/oauth", "sha": "abc1234"},
+			"base":      map[string]any{"ref": "main", "sha": "def5678"},
+		},
+		"repository": map[string]any{
+			"full_name": "octocat/Hello-World",
+			"html_url":  "https://github.com/octocat/Hello-World",
+			"private":   false,
+		},
+		"sender": map[string]any{"login": "reviewer1"},
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal review payload: %v", err)
+	}
+	return b
+}
+
+func reviewThreadJSON(t *testing.T, action string, isResolved bool) []byte {
+	t.Helper()
+	payload := map[string]any{
+		"action": action,
+		"thread": map[string]any{
+			"id":          789,
+			"node_id":     "PRR_kwDOA",
+			"is_resolved": isResolved,
+			"comments": []map[string]any{
+				{
+					"id":         1001,
+					"body":       "Should we use a different approach here?",
+					"html_url":   "https://github.com/octocat/Hello-World/pull/42#discussion_r1001",
+					"user":       map[string]any{"login": "contributor"},
+					"created_at": "2026-06-11T13:00:00Z",
+					"updated_at": "2026-06-11T13:00:00Z",
+				},
+				{
+					"id":         1002,
+					"body":       "Good point, actually this needs more thought.",
+					"html_url":   "https://github.com/octocat/Hello-World/pull/42#discussion_r1002",
+					"user":       map[string]any{"login": "author"},
+					"created_at": "2026-06-11T13:30:00Z",
+					"updated_at": "2026-06-11T13:30:00Z",
+				},
+			},
+		},
+		"pull_request": map[string]any{
+			"number":    42,
+			"title":     "Add OAuth2 login support",
+			"state":     "open",
+			"html_url":  "https://github.com/octocat/Hello-World/pull/42",
+			"user":      map[string]any{"login": "author"},
+			"head":      map[string]any{"ref": "feat/oauth", "sha": "abc"},
+			"base":      map[string]any{"ref": "main", "sha": "def"},
+		},
+		"repository": map[string]any{
+			"full_name": "octocat/Hello-World",
+			"html_url":  "https://github.com/octocat/Hello-World",
+			"private":   false,
+		},
+		"sender": map[string]any{"login": "author"},
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal review thread payload: %v", err)
 	}
 	return b
 }

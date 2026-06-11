@@ -199,6 +199,117 @@ func TestParseIssues(t *testing.T) {
 	}
 }
 
+func TestParseReview(t *testing.T) {
+	body := []byte(`{
+		"action": "submitted",
+		"review": {
+			"id": 456,
+			"body": "LGTM, just a minor nit on the error handling.",
+			"state": "approved",
+			"html_url": "https://github.com/octocat/Hello-World/pull/42#pullrequestreview-456",
+			"user": { "login": "reviewer1", "name": "Reviewer One" },
+			"submitted_at": "2026-06-11T14:00:00Z",
+			"commit_id": "abc1234567890123456789012345678901234567"
+		},
+		"pull_request": {
+			"number": 42,
+			"title": "Add OAuth2 login support",
+			"state": "open",
+			"html_url": "https://github.com/octocat/Hello-World/pull/42",
+			"user": { "login": "author" },
+			"head": { "ref": "feat/oauth", "sha": "abc" },
+			"base": { "ref": "main", "sha": "def" }
+		},
+		"repository": {
+			"full_name": "octocat/Hello-World",
+			"html_url": "https://github.com/octocat/Hello-World",
+			"private": false
+		},
+		"sender": { "login": "reviewer1" }
+	}`)
+
+	ev, err := ParseReview(body)
+	if err != nil {
+		t.Fatalf("ParseReview failed: %v", err)
+	}
+	if ev.Action != "submitted" {
+		t.Errorf("Action = %s, want submitted", ev.Action)
+	}
+	if ev.Review.State != "approved" {
+		t.Errorf("Review.State = %s, want approved", ev.Review.State)
+	}
+	if ev.Review.User.Login != "reviewer1" {
+		t.Errorf("Review.User.Login = %s, want reviewer1", ev.Review.User.Login)
+	}
+	if ev.PullRequest.Number != 42 {
+		t.Errorf("PR Number = %d, want 42", ev.PullRequest.Number)
+	}
+}
+
+func TestParseReviewThread(t *testing.T) {
+	body := []byte(`{
+		"action": "resolved",
+		"thread": {
+			"id": 789,
+			"node_id": "PRR_kwDOA",
+			"is_resolved": true,
+			"comments": [
+				{
+					"id": 1001,
+					"body": "Should we use a different approach here?",
+					"html_url": "https://github.com/octocat/Hello-World/pull/42#discussion_r1001",
+					"user": { "login": "contributor" },
+					"created_at": "2026-06-11T13:00:00Z",
+					"updated_at": "2026-06-11T13:00:00Z"
+				},
+				{
+					"id": 1002,
+					"body": "Good point, I'll refactor this part.",
+					"html_url": "https://github.com/octocat/Hello-World/pull/42#discussion_r1002",
+					"user": { "login": "author" },
+					"created_at": "2026-06-11T13:30:00Z",
+					"updated_at": "2026-06-11T13:30:00Z"
+				}
+			]
+		},
+		"pull_request": {
+			"number": 42,
+			"title": "Add OAuth2 login support",
+			"state": "open",
+			"html_url": "https://github.com/octocat/Hello-World/pull/42",
+			"user": { "login": "author" },
+			"head": { "ref": "feat/oauth", "sha": "abc" },
+			"base": { "ref": "main", "sha": "def" }
+		},
+		"repository": {
+			"full_name": "octocat/Hello-World",
+			"html_url": "https://github.com/octocat/Hello-World",
+			"private": false
+		},
+		"sender": { "login": "author" }
+	}`)
+
+	ev, err := ParseReviewThread(body)
+	if err != nil {
+		t.Fatalf("ParseReviewThread failed: %v", err)
+	}
+	if ev.Action != "resolved" {
+		t.Errorf("Action = %s, want resolved", ev.Action)
+	}
+	if !ev.Thread.IsResolved {
+		t.Error("Thread.IsResolved should be true")
+	}
+	if len(ev.Thread.Comments) != 2 {
+		t.Errorf("len(Comments) = %d, want 2", len(ev.Thread.Comments))
+	}
+	if ev.Thread.Comments[1].Body != "Good point, I'll refactor this part." {
+		t.Errorf("Last comment body mismatch")
+	}
+	if ev.Thread.Comments[0].User.Login != "contributor" {
+		t.Errorf("First comment user mismatch")
+	}
+}
+
 func TestValidateSignature(t *testing.T) {
 	secret := "my-secret-token"
 	body := []byte(`{"test": "payload"}`)

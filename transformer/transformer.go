@@ -21,6 +21,10 @@ func Transform(eventType string, body []byte) (*lark.InteractiveMessage, error) 
 		return buildPullRequestCard(body)
 	case "issues":
 		return buildIssueCard(body)
+	case "pull_request_review":
+		return buildReviewCard(body)
+	case "pull_request_review_thread":
+		return buildReviewThreadCard(body)
 	default:
 		return buildFallbackCard(eventType, body), nil
 	}
@@ -208,6 +212,149 @@ func buildIssueCard(body []byte) (*lark.InteractiveMessage, error) {
 	return &card, nil
 }
 
+// --- Pull Request Review ---
+
+func buildReviewCard(body []byte) (*lark.InteractiveMessage, error) {
+	ev, err := webhook.ParseReview(body)
+	if err != nil {
+		return nil, fmt.Errorf("parse pull_request_review: %w", err)
+	}
+
+	color, emoji := reviewActionStyle(ev.Action)
+
+	card := lark.InteractiveMessage{
+		Card: lark.CardConfig{
+			Schema: "2.0",
+			Header: lark.CardHeader{
+				Title:    lark.TextTag{Tag: "plain_text", Content: fmt.Sprintf("%s Review %s", emoji, ev.Action)},
+				Template: color,
+			},
+			Body: lark.CardBody{
+				Direction: "vertical",
+				Elements:  []lark.CardElement{},
+			},
+		},
+	}
+
+	addMD(&card, "**[#%d %s](%s)**", ev.PullRequest.Number, ev.PullRequest.Title, ev.PullRequest.HTMLURL)
+	addMD(&card, "**Repository:** [%s](%s)", ev.Repository.FullName, ev.Repository.HTMLURL)
+	addMD(&card, "**Reviewer:** %s", userLogin(ev.Review.User))
+	addMD(&card, "**Verdict:** %s", reviewStateLabel(ev.Review.State))
+
+	if ev.Review.CommitID != "" {
+		addMD(&card, "**Commit:** `%s`", shortSHA(ev.Review.CommitID))
+	}
+
+	if ev.Review.Body != "" {
+		addMD(&card, "**Comment:** %s", truncate(ev.Review.Body, 200))
+	}
+
+	addElement(&card, lark.CardElement{Tag: "hr"})
+	addElement(&card, lark.CardElement{
+		Tag: "button",
+		Text: &lark.TextTag{
+			Tag:     "plain_text",
+			Content: "View Review",
+		},
+		Behaviors: []lark.Behavior{{
+			Type:       "open_url",
+			DefaultURL: coalesceURL(ev.Review.HTMLURL, ev.PullRequest.HTMLURL),
+		}},
+	})
+
+	return &card, nil
+}
+
+func reviewActionStyle(action string) (string, string) {
+	switch action {
+	case "submitted":
+		return "green", "📝"
+	case "edited":
+		return "blue", "✏️"
+	case "dismissed":
+		return "orange", "🗑️"
+	default:
+		return "blue", "ℹ️"
+	}
+}
+
+func reviewStateLabel(state string) string {
+	switch state {
+	case "approved":
+		return "✅ Approved"
+	case "changes_requested":
+		return "🔴 Changes Requested"
+	case "commented":
+		return "💬 Commented"
+	case "dismissed":
+		return "🗑️ Dismissed"
+	default:
+		return state
+	}
+}
+
+// --- Pull Request Review Thread ---
+
+func buildReviewThreadCard(body []byte) (*lark.InteractiveMessage, error) {
+	ev, err := webhook.ParseReviewThread(body)
+	if err != nil {
+		return nil, fmt.Errorf("parse pull_request_review_thread: %w", err)
+	}
+
+	action := ev.Action
+	color := "green"
+	emoji := "✅"
+	if action == "unresolved" {
+		color = "orange"
+		emoji = "🔄"
+	}
+
+	card := lark.InteractiveMessage{
+		Card: lark.CardConfig{
+			Schema: "2.0",
+			Header: lark.CardHeader{
+				Title:    lark.TextTag{Tag: "plain_text", Content: fmt.Sprintf("%s Review Thread %s", emoji, action)},
+				Template: color,
+			},
+			Body: lark.CardBody{
+				Direction: "vertical",
+				Elements:  []lark.CardElement{},
+			},
+		},
+	}
+
+	addMD(&card, "**[#%d %s](%s)**", ev.PullRequest.Number, ev.PullRequest.Title, ev.PullRequest.HTMLURL)
+	addMD(&card, "**Repository:** [%s](%s)", ev.Repository.FullName, ev.Repository.HTMLURL)
+	addMD(&card, "**Thread State:** %s %s", emoji, action)
+
+	// Show last comment in the thread as context
+	if len(ev.Thread.Comments) > 0 {
+		last := ev.Thread.Comments[len(ev.Thread.Comments)-1]
+		addMD(&card, "**Last Comment by:** %s", userLogin(last.User))
+		addMD(&card, "**Comment:** %s", truncate(last.Body, 200))
+	}
+
+	total := len(ev.Thread.Comments)
+	if total > 1 {
+		addMD(&card, "*%d comments in this thread*", total)
+	}
+
+	addElement(&card, lark.CardElement{Tag: "hr"})
+	addElement(&card, lark.CardElement{
+		Tag: "button",
+		Text: &lark.TextTag{
+			Tag:     "plain_text",
+			Content: "View Pull Request",
+		},
+		Behaviors: []lark.Behavior{{
+			Type:       "open_url",
+			DefaultURL: ev.PullRequest.HTMLURL,
+		}},
+	})
+
+	return &card, nil
+}
+
 // --- Fallback ---
 
 func buildFallbackCard(eventType string, body []byte) *lark.InteractiveMessage {
@@ -276,6 +423,13 @@ func userLogin(u webhook.User) string {
 		return u.Username
 	}
 	return u.Name
+}
+
+func coalesceURL(preferred, fallback string) string {
+	if preferred != "" {
+		return preferred
+	}
+	return fallback
 }
 
 func formatLabels(labels []webhook.Label) string {

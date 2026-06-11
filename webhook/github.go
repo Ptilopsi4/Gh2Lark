@@ -137,6 +137,55 @@ type Label struct {
 	Color string `json:"color"`
 }
 
+// ReviewEvent represents a pull_request_review event payload.
+// https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review
+type ReviewEvent struct {
+	Action      string      `json:"action"`
+	Review      Review      `json:"review"`
+	PullRequest PullRequest `json:"pull_request"`
+	Repository  Repo        `json:"repository"`
+	Sender      User        `json:"sender"`
+}
+
+// Review holds a single pull request review.
+type Review struct {
+	ID          int    `json:"id"`
+	Body        string `json:"body"`
+	State       string `json:"state"`
+	HTMLURL     string `json:"html_url"`
+	User        User   `json:"user"`
+	SubmittedAt string `json:"submitted_at"`
+	CommitID    string `json:"commit_id"`
+}
+
+// ReviewThreadEvent represents a pull_request_review_thread event payload.
+// https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request_review_thread
+type ReviewThreadEvent struct {
+	Action      string       `json:"action"`
+	Thread      ReviewThread `json:"thread"`
+	PullRequest PullRequest  `json:"pull_request"`
+	Repository  Repo         `json:"repository"`
+	Sender      User         `json:"sender"`
+}
+
+// ReviewThread holds a review comment thread on a pull request.
+type ReviewThread struct {
+	ID         int      `json:"id"`
+	NodeID     string   `json:"node_id"`
+	IsResolved bool     `json:"is_resolved"`
+	Comments   []ReviewThreadComment `json:"comments"`
+}
+
+// ReviewThreadComment is a single comment within a review thread.
+type ReviewThreadComment struct {
+	ID        int    `json:"id"`
+	Body      string `json:"body"`
+	HTMLURL   string `json:"html_url"`
+	User      User   `json:"user"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 // --- Parse functions ---
 
 // ParsePush unmarshals a push event payload.
@@ -160,6 +209,24 @@ func ParsePullRequest(body []byte) (*PullRequestEvent, error) {
 // ParseIssues unmarshals an issues event payload.
 func ParseIssues(body []byte) (*IssuesEvent, error) {
 	var e IssuesEvent
+	if err := json.Unmarshal(body, &e); err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// ParseReview unmarshals a pull_request_review event payload.
+func ParseReview(body []byte) (*ReviewEvent, error) {
+	var e ReviewEvent
+	if err := json.Unmarshal(body, &e); err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// ParseReviewThread unmarshals a pull_request_review_thread event payload.
+func ParseReviewThread(body []byte) (*ReviewThreadEvent, error) {
+	var e ReviewThreadEvent
 	if err := json.Unmarshal(body, &e); err != nil {
 		return nil, err
 	}
