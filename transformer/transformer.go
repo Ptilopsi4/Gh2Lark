@@ -116,13 +116,13 @@ func buildPullRequestCard(body []byte) (*lark.InteractiveMessage, error) {
 	}
 	pr := ev.PullRequest
 
-	color, emoji := prActionStyle(ev.Action)
+	color, emoji, actionText := prActionStyle(ev.Action, pr.Merged)
 
 	card := lark.InteractiveMessage{
 		Card: lark.CardConfig{
 			Schema: "2.0",
 			Header: lark.CardHeader{
-				Title:    lark.TextTag{Tag: "plain_text", Content: fmt.Sprintf("%s Pull Request %s", emoji, ev.Action)},
+				Title:    lark.TextTag{Tag: "plain_text", Content: fmt.Sprintf("%s Pull Request %s", emoji, actionText)},
 				Template: color,
 			},
 			Body: lark.CardBody{
@@ -286,33 +286,34 @@ func formatLabels(labels []webhook.Label) string {
 	return strings.Join(parts, " ")
 }
 
-// prActionStyle returns (header color, emoji) for a given PR action.
-func prActionStyle(action string) (string, string) {
-	switch action {
-	case "opened":
-		return "green", "🆕"
-	case "closed":
-		return "red", "🔒"
-	case "merged":
-		return "purple", "✅"
-	case "reopened":
-		return "turquoise", "🔄"
-	case "ready_for_review":
-		return "blue", "👀"
-	case "review_requested":
-		return "blue", "👀"
-	case "converted_to_draft":
-		return "orange", "📝"
-	case "edited":
-		return "blue", "✏️"
-	case "labeled":
-		return "blue", "🏷️"
-	case "unlabeled":
-		return "blue", "🏷️"
-	case "assigned":
-		return "blue", "👤"
+// prActionStyle returns (header color, emoji, display action) for a given PR action.
+// GitHub uses action="closed" with merged=true/false — there is no action="merged".
+func prActionStyle(action string, merged bool) (string, string, string) {
+	switch {
+	case action == "closed" && merged:
+		return "purple", "✅", "merged"
+	case action == "closed":
+		return "red", "🔒", "closed"
+	case action == "opened":
+		return "green", "🆕", "opened"
+	case action == "reopened":
+		return "turquoise", "🔄", "reopened"
+	case action == "ready_for_review":
+		return "blue", "👀", action
+	case action == "review_requested":
+		return "blue", "👀", action
+	case action == "converted_to_draft":
+		return "orange", "📝", action
+	case action == "edited":
+		return "blue", "✏️", action
+	case action == "labeled":
+		return "blue", "🏷️", action
+	case action == "unlabeled":
+		return "blue", "🏷️", action
+	case action == "assigned":
+		return "blue", "👤", action
 	default:
-		return "blue", "ℹ️"
+		return "blue", "ℹ️", action
 	}
 }
 
