@@ -105,18 +105,15 @@ func TestTransformPullRequestClosed(t *testing.T) {
 func TestTransformPullRequestMerged(t *testing.T) {
 	body := githubPullRequestJSON(t, "closed", "closed", true, "feat/x", "main")
 
-	// For merged PRs, the action is still "closed" but merged=true.
-	// Our transformer uses the action string, so it will show "closed" with red.
-	// That's a known design choice — merged notification usually comes as a
-	// separate "pull_request" event with action=closed and merged=true.
-	// (GitHub doesn't send action="merged" — it sends closed + merged bool.)
 	card, err := Transform("pull_request", body)
 	if err != nil {
 		t.Fatalf("Transform merged PR failed: %v", err)
 	}
-	cardJSON, _ := json.Marshal(card)
-	if len(cardJSON) == 0 {
-		t.Error("card should not be empty")
+	if card.Card.Header.Template != "purple" {
+		t.Errorf("merged PR color = %s, want purple", card.Card.Header.Template)
+	}
+	if !contains(t, card, "merged") {
+		t.Error("card should display 'merged' for merged PRs")
 	}
 }
 
