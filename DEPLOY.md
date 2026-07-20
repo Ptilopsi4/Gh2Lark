@@ -99,8 +99,32 @@ systemctl reload caddy
 # 3. Content type:   application/json
 # 4. Secret:         与 .env 中 GITHUB_WEBHOOK_SECRET 一致
 # 5. SSL verification: Enable
-# 6. Events:         Let me select → Push, Pull requests, Issues
+# 6. Events:         Let me select → 按下列清单勾选（代码已提供语义化卡片）
+#
+# 代码与协作：Push、Branch or tag creation、Branch or tag deletion、Pull requests、
+# Pull request reviews、Pull request review comments、Pull request review threads、Issues、
+# Issue comments、Issue dependencies、Sub-issues、Discussions、Discussion comments、
+# Commit comments、Labels、Milestones、Collaborator add, remove, or changed、Team adds、
+# Forks、Stars、Watches、Wiki。
+#
+# CI / 发布：Check runs、Check suites、Statuses、Merge groups、Workflow jobs、Workflow runs、
+# Deployments、Deployment statuses、Page builds、Packages、Registry packages、Releases。
+#
+# 仓库与规则：Branch protection configurations、Branch protection rules、
+# Custom property values、Deploy keys、Repositories、Repository imports、Repository rulesets、
+# Repository advisories、Repository vulnerability alerts、Security and analyses、
+# Visibility changes、Meta。
+#
+# 安全与例外：Code scanning alerts、Dependabot alerts、Secret scanning alerts、
+# Secret scanning alert locations、Secret scanning scans、Bypass requests for push rulesets、
+# Bypass requests for secret scanning push protections、Dismissal requests for dependabot alerts、
+# Dismissal requests for code scanning alerts、Dismissal requests for secret scanning alerts。
 # 7. Active:         ✅
+#
+# 注意：GitHub 仅在仓库功能已启用、Webhook 创建者具备相应权限时才投递部分
+# security、ruleset、discussion、package 和 workflow 事件。安全卡会完整转发 payload 中的
+# 告警路径、secret 类型和 bypass reason；请仅配置可信的飞书机器人群，并遵循组织的留存策略。
+# 可通过 Webhook 设置页的 Recent Deliveries → Redeliver 查看实际 payload 和验证卡片。
 
 ## 6️⃣ 更新代码（后续）
 

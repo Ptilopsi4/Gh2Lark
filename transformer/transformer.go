@@ -8,9 +8,9 @@ import (
 	"gh2lark/webhook"
 )
 
-const maxCommits = 5       // max individual commits to show in a push card
-const maxMsgLen = 80       // max length of commit first line
-const shortSHALen = 7      // number of characters for abbreviated SHA
+const maxCommits = 5  // max individual commits to show in a push card
+const maxMsgLen = 80  // max length of commit first line
+const shortSHALen = 7 // number of characters for abbreviated SHA
 
 // Transform converts a GitHub webhook event into a Lark interactive card.
 func Transform(eventType string, body []byte) (*lark.InteractiveMessage, error) {
@@ -26,7 +26,7 @@ func Transform(eventType string, body []byte) (*lark.InteractiveMessage, error) 
 	case "pull_request_review_thread":
 		return buildReviewThreadCard(body)
 	default:
-		return buildFallbackCard(eventType, body), nil
+		return buildGenericEventCard(eventType, body)
 	}
 }
 
